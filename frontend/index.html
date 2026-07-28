@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Task Tracker</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --ink: #1f2430;
+      --muted: #6b7280;
+      --line: #e3e6ea;
+      --accent: #4f46e5;
+      --accent-ink: #ffffff;
+      --high: #dc2626;
+      --medium: #d97706;
+      --low: #2563eb;
+      --danger-bg: #fef2f2;
+      --danger-ink: #b91c1c;
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+
+    header.app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    header.app-header .titles h1 { margin: 0; font-size: 1.25rem; }
+    header.app-header .titles p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.85rem; }
+
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 0.5rem 0.85rem;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    button:hover { background: #f0f1f4; }
+    button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+    button.primary:hover { filter: brightness(1.06); }
+
+    main { padding: 1.25rem 1.5rem; }
+
+    /* Board-level banner (error / rollback messages) */
+    #banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      background: var(--danger-bg);
+      color: var(--danger-ink);
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 0.6rem 0.85rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    #banner.show { display: flex; }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+    }
+    .filter-bar input[type="search"],
+    .filter-bar select {
+      font: inherit;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .filter-bar input[type="search"] { flex: 1; min-width: 180px; }
+    .filter-bar .overdue-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      user-select: none;
+    }
+
+    #loading {
+      display: none;
+      color: var(--muted);
+      padding: 2rem;
+      text-align: center;
+    }
+    #loading.show { display: block; }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .board.hidden { display: none; }
+
+    .column {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+    }
+    .column-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 0.9rem;
+      border-bottom: 1px solid var(--line);
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .column-header .count {
+      color: var(--muted);
+      font-weight: 500;
+      background: var(--bg);
+      border-radius: 999px;
+      padding: 0.05rem 0.55rem;
+      font-size: 0.8rem;
+    }
+    .card-list {
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      flex: 1;
+      min-height: 60px;
+    }
+    .column.drag-over .card-list { background: #eef2ff; border-radius: 0 0 12px 12px; }
+
+    .placeholder {
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 1.25rem 0.5rem;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.7rem 0.75rem;
+      box-shadow: var(--shadow);
+      cursor: grab;
+    }
+    .card:active { cursor: grabbing; }
+    .card.dragging { opacity: 0.5; }
+    .card h3 { margin: 0 0 0.25rem; font-size: 0.95rem; }
+    .card .desc { margin: 0 0 0.5rem; color: var(--muted); font-size: 0.83rem; white-space: pre-wrap; }
+    .card .meta { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .card .who { color: var(--muted); font-size: 0.8rem; }
+
+    .pill {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      color: #fff;
+    }
+    .pill.High { background: var(--high); }
+    .pill.Medium { background: var(--medium); }
+    .pill.Low { background: var(--low); }
+    .pill.overdue-pill { background: var(--high); }
+
+    .card .due { margin-top: 0.45rem; font-size: 0.78rem; color: var(--muted); display: flex; align-items: center; gap: 0.4rem; }
+    .card .due.overdue { color: var(--high); font-weight: 600; }
+
+    .card .edit-btn { padding: 0.25rem 0.55rem; font-size: 0.78rem; }
+
+    /* Modal */
+    .overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.45);
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .overlay.show { display: flex; }
+    .modal {
+      background: var(--panel);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 40px rgba(16, 24, 40, 0.25);
+      overflow: hidden;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.9rem 1.1rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .modal-header h2 { margin: 0; font-size: 1.05rem; }
+    .modal-header .close { border: none; background: none; font-size: 1.3rem; line-height: 1; padding: 0.1rem 0.4rem; }
+    .modal-body { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .field { display: flex; flex-direction: column; gap: 0.25rem; }
+    .field label { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+    .field input, .field textarea, .field select {
+      font: inherit;
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .field textarea { resize: vertical; min-height: 60px; }
+    .form-error {
+      display: none;
+      background: var(--danger-bg);
+      color: var(--danger-ink);
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 0.5rem 0.65rem;
+      font-size: 0.83rem;
+    }
+    .form-error.show { display: block; }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      padding: 0.9rem 1.1rem;
+      border-top: 1px solid var(--line);
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="titles">
+      <h1>Task Tracker</h1>
+      <p>A simple Kanban board for a shared task list</p>
+    </div>
+    <button id="new-task-btn" class="primary">+ New Task</button>
+  </header>
+
+  <main>
+    <div id="banner">
+      <span id="banner-text"></span>
+      <button id="banner-retry">Retry</button>
+    </div>
+
+    <div class="filter-bar">
+      <input type="search" id="search" placeholder="Search title or description…" />
+      <select id="filter-priority" aria-label="Filter by priority">
+        <option value="">All priorities</option>
+        <option value="High">High</option>
+        <option value="Medium">Medium</option>
+        <option value="Low">Low</option>
+      </select>
+      <label class="overdue-toggle">
+        <input type="checkbox" id="filter-overdue" /> Overdue only
+      </label>
+      <button id="filter-clear">Clear</button>
+    </div>
+
+    <div id="loading">Loading tasks…</div>
+
+    <div class="board" id="board">
+      <!-- Columns are static; card lists are rendered from data. -->
+      <section class="column" data-status="ToDo">
+        <div class="column-header"><span>To Do</span><span class="count" data-count>0</span></div>
+        <div class="card-list" data-list></div>
+      </section>
+      <section class="column" data-status="InProgress">
+        <div class="column-header"><span>In Progress</span><span class="count" data-count>0</span></div>
+        <div class="card-list" data-list></div>
+      </section>
+      <section class="column" data-status="Done">
+        <div class="column-header"><span>Done</span><span class="count" data-count>0</span></div>
+        <div class="card-list" data-list></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Create / Edit modal -->
+  <div class="overlay" id="overlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h2 id="modal-title">New Task</h2>
+        <button class="close" id="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-error" id="form-error"></div>
+        <input type="hidden" id="f-id" />
+        <div class="field">
+          <label for="f-title">Title</label>
+          <input type="text" id="f-title" maxlength="200" />
+        </div>
+        <div class="field">
+          <label for="f-description">Description</label>
+          <textarea id="f-description"></textarea>
+        </div>
+        <div class="field">
+          <label for="f-status">Status</label>
+          <select id="f-status">
+            <option value="ToDo">To Do</option>
+            <option value="InProgress">In Progress</option>
+            <option value="Done">Done</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-priority">Priority</label>
+          <select id="f-priority">
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-due-date">Due date</label>
+          <input type="date" id="f-due-date" />
+        </div>
+        <div class="field">
+          <label for="f-assignee">Assignee</label>
+          <input type="text" id="f-assignee" placeholder="Leave blank for Unassigned" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="modal-cancel">Cancel</button>
+        <button id="modal-save" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const BASE_URL = "http://localhost:8000";
+    const STATUSES = ["ToDo", "InProgress", "Done"];
+    const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+
+    // In-memory copy of the tasks currently shown on the board.
+    let tasks = [];
+    // The task being edited (null when creating).
+    let editingTask = null;
+    // Active filters, sent to the backend as query params.
+    const filters = { q: "", priority: "", overdue: false };
+
+    // ---- DOM refs ----
+    const boardEl = document.getElementById("board");
+    const loadingEl = document.getElementById("loading");
+    const bannerEl = document.getElementById("banner");
+    const bannerText = document.getElementById("banner-text");
+    const overlayEl = document.getElementById("overlay");
+    const modalTitle = document.getElementById("modal-title");
+    const formError = document.getElementById("form-error");
+    const fId = document.getElementById("f-id");
+    const fTitle = document.getElementById("f-title");
+    const fDescription = document.getElementById("f-description");
+    const fStatus = document.getElementById("f-status");
+    const fPriority = document.getElementById("f-priority");
+    const fDueDate = document.getElementById("f-due-date");
+    const fAssignee = document.getElementById("f-assignee");
+
+    // ---- Utilities ----
+    function escapeHtml(value) {
+      if (value === null || value === undefined) return "";
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    // Overdue = has a due date strictly before today AND not Done.
+    // Computed on the client for the card pill; the backend owns the filter.
+    function isOverdue(task) {
+      if (!task.due_date || task.status === "Done") return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const due = new Date(task.due_date + "T00:00:00");
+      return due < today;
+    }
+
+    function sortTasks(list) {
+      return [...list].sort((a, b) => {
+        const byPriority = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+        return byPriority !== 0 ? byPriority : a.id - b.id;
+      });
+    }
+
+    function showBanner(message) {
+      bannerText.textContent = message;
+      bannerEl.classList.add("show");
+    }
+    function hideBanner() { bannerEl.classList.remove("show"); }
+
+    // ---- UI states: loading / ready / empty / error ----
+    function setLoading() {
+      loadingEl.classList.add("show");
+      boardEl.classList.add("hidden");
+      hideBanner();
+    }
+    function setError(message) {
+      loadingEl.classList.remove("show");
+      boardEl.classList.add("hidden");
+      showBanner(message);
+    }
+    function setReady() {
+      loadingEl.classList.remove("show");
+      boardEl.classList.remove("hidden");
+    }
+
+    // ---- Fetch + render ----
+    // Build the /tasks query string from the active filters. Filters combine on
+    // the backend (AND), so the board reflects exactly what the API returns.
+    function buildQuery() {
+      const params = new URLSearchParams();
+      if (filters.q.trim()) params.set("q", filters.q.trim());
+      if (filters.priority) params.set("priority", filters.priority);
+      if (filters.overdue) params.set("overdue", "true");
+      const qs = params.toString();
+      return qs ? `?${qs}` : "";
+    }
+
+    async function fetchTasks() {
+      setLoading();
+      try {
+        const res = await fetch(`${BASE_URL}/tasks${buildQuery()}`);
+        if (!res.ok) throw new Error(`GET /tasks returned ${res.status}`);
+        tasks = await res.json();
+        hideBanner();
+        setReady();
+        renderBoard();
+      } catch (err) {
+        // Error state: board hidden, banner with Retry (wired once, below).
+        setError("Could not load tasks. Is the backend running on :8000?");
+      }
+    }
+
+    function renderBoard() {
+      // Empty state is simply every column at count 0 with a placeholder — the
+      // columns always stay visible so they remain valid drop targets.
+      STATUSES.forEach((status) => {
+        const column = boardEl.querySelector(`.column[data-status="${status}"]`);
+        const list = column.querySelector("[data-list]");
+        const countEl = column.querySelector("[data-count]");
+        const columnTasks = sortTasks(tasks.filter((t) => t.status === status));
+        countEl.textContent = columnTasks.length;
+
+        if (columnTasks.length === 0) {
+          list.innerHTML = `<div class="placeholder">No tasks</div>`;
+          return;
+        }
+        list.innerHTML = columnTasks.map(renderCard).join("");
+      });
+    }
+
+    function renderCard(task) {
+      const who = task.assignee ? escapeHtml(task.assignee) : "Unassigned";
+      const desc = task.description
+        ? `<p class="desc">${escapeHtml(task.description)}</p>` : "";
+      const overdue = isOverdue(task);
+      const due = task.due_date
+        ? `<div class="due ${overdue ? "overdue" : ""}">
+             Due ${escapeHtml(task.due_date)}
+             ${overdue ? '<span class="pill overdue-pill">Overdue</span>' : ""}
+           </div>`
+        : "";
+      return `
+        <article class="card" draggable="true" data-id="${task.id}">
+          <h3>${escapeHtml(task.title)}</h3>
+          ${desc}
+          <div class="meta">
+            <span class="pill ${escapeHtml(task.priority)}">${escapeHtml(task.priority)}</span>
+            <span class="who">${who}</span>
+            <button class="edit-btn" data-edit="${task.id}">Edit</button>
+          </div>
+          ${due}
+        </article>`;
+    }
+
+    // ---- Drag and drop (native HTML5) ----
+    let draggedId = null;
+
+    boardEl.addEventListener("dragstart", (e) => {
+      const card = e.target.closest(".card");
+      if (!card) return;
+      draggedId = Number(card.dataset.id);
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(draggedId));
+    });
+
+    boardEl.addEventListener("dragend", (e) => {
+      const card = e.target.closest(".card");
+      if (card) card.classList.remove("dragging");
+    });
+
+    boardEl.querySelectorAll(".column").forEach((column) => {
+      column.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        column.classList.add("drag-over");
+      });
+      column.addEventListener("dragleave", () => column.classList.remove("drag-over"));
+      column.addEventListener("drop", (e) => {
+        e.preventDefault();
+        column.classList.remove("drag-over");
+        const targetStatus = column.dataset.status;
+        handleDrop(draggedId, targetStatus);
+        draggedId = null;
+      });
+    });
+
+    async function handleDrop(taskId, targetStatus) {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const previousStatus = task.status;
+      // Same-column drop is a no-op: do not PATCH.
+      if (previousStatus === targetStatus) return;
+
+      // Optimistic update: move locally first, then confirm with the server.
+      task.status = targetStatus;
+      renderBoard();
+
+      try {
+        const res = await fetch(`${BASE_URL}/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: targetStatus }),
+        });
+        if (res.ok) {
+          hideBanner();
+          return;
+        }
+        // Server rejected the move (e.g. 422 invalid transition): roll back.
+        task.status = previousStatus;
+        renderBoard();
+        showBanner(await extractError(res, "That status change is not allowed."));
+      } catch (err) {
+        // Network failure: roll back.
+        task.status = previousStatus;
+        renderBoard();
+        showBanner("Network error while updating the task. Change reverted.");
+      }
+    }
+
+    // ---- Modal: open / close ----
+    function openCreateModal() {
+      editingTask = null;
+      modalTitle.textContent = "New Task";
+      fId.value = "";
+      fTitle.value = "";
+      fDescription.value = "";
+      fStatus.value = "ToDo";
+      fPriority.value = "Medium";
+      fDueDate.value = "";
+      fAssignee.value = "";
+      clearFormError();
+      overlayEl.classList.add("show");
+      fTitle.focus();
+    }
+
+    function openEditModal(task) {
+      editingTask = task;
+      modalTitle.textContent = "Edit Task";
+      fId.value = task.id;
+      fTitle.value = task.title;
+      fDescription.value = task.description || "";
+      fStatus.value = task.status;
+      fPriority.value = task.priority;
+      fDueDate.value = task.due_date || "";
+      fAssignee.value = task.assignee || "";
+      clearFormError();
+      overlayEl.classList.add("show");
+      fTitle.focus();
+    }
+
+    function closeModal() {
+      overlayEl.classList.remove("show");
+      clearFormError();
+      editingTask = null;
+    }
+
+    function showFormError(message) {
+      formError.textContent = message;
+      formError.classList.add("show");
+    }
+    function clearFormError() {
+      formError.textContent = "";
+      formError.classList.remove("show");
+    }
+
+    // ---- Modal: submit (create via POST, edit via diff-based PATCH) ----
+    async function submitModal() {
+      const title = fTitle.value.trim();
+      // Client-side validation happens before any network request.
+      if (!title) {
+        showFormError("Title is required");
+        return;
+      }
+      const description = fDescription.value;
+      const assigneeRaw = fAssignee.value.trim();
+      const assignee = assigneeRaw === "" ? null : assigneeRaw;
+      const status = fStatus.value;
+      const priority = fPriority.value;
+      const dueDate = fDueDate.value === "" ? null : fDueDate.value;
+
+      let url, method, body;
+
+      if (editingTask) {
+        // Only send fields that actually changed. This preserves PATCH partial
+        // semantics and avoids sending status=current (a rejected no-op move).
+        body = {};
+        if (title !== editingTask.title) body.title = title;
+        if (description !== (editingTask.description || "")) body.description = description;
+        if (status !== editingTask.status) body.status = status;
+        if (priority !== editingTask.priority) body.priority = priority;
+        if (assignee !== (editingTask.assignee ?? null)) body.assignee = assignee;
+        if (dueDate !== (editingTask.due_date ?? null)) body.due_date = dueDate;
+
+        if (Object.keys(body).length === 0) { closeModal(); return; }
+        url = `${BASE_URL}/tasks/${editingTask.id}`;
+        method = "PATCH";
+      } else {
+        body = { title, description, status, priority, assignee, due_date: dueDate };
+        url = `${BASE_URL}/tasks`;
+        method = "POST";
+      }
+
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          closeModal();
+          fetchTasks();
+          return;
+        }
+        // Server validation/business-rule failure: keep the modal open.
+        showFormError(await extractError(res, "The server rejected this request."));
+      } catch (err) {
+        showFormError("Network error. Please try again.");
+      }
+    }
+
+    // Turn a FastAPI error response into a readable message. FastAPI returns
+    // {"detail": "..."} for HTTPException and {"detail": [{msg: ...}]} for
+    // validation errors.
+    async function extractError(res, fallback) {
+      try {
+        const data = await res.json();
+        if (typeof data.detail === "string") return data.detail;
+        if (Array.isArray(data.detail) && data.detail.length) {
+          return data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+        }
+      } catch (_) { /* ignore parse errors */ }
+      return fallback;
+    }
+
+    // ---- Event wiring ----
+    document.getElementById("new-task-btn").addEventListener("click", openCreateModal);
+    document.getElementById("modal-close").addEventListener("click", closeModal);
+    document.getElementById("modal-cancel").addEventListener("click", closeModal);
+    document.getElementById("modal-save").addEventListener("click", submitModal);
+    document.getElementById("banner-retry").addEventListener("click", fetchTasks);
+
+    // Filter bar: search is debounced; selects/toggles refetch immediately.
+    const searchEl = document.getElementById("search");
+    const filterPriorityEl = document.getElementById("filter-priority");
+    const filterOverdueEl = document.getElementById("filter-overdue");
+    let searchTimer;
+    searchEl.addEventListener("input", () => {
+      filters.q = searchEl.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(fetchTasks, 250);
+    });
+    filterPriorityEl.addEventListener("change", () => {
+      filters.priority = filterPriorityEl.value;
+      fetchTasks();
+    });
+    filterOverdueEl.addEventListener("change", () => {
+      filters.overdue = filterOverdueEl.checked;
+      fetchTasks();
+    });
+    document.getElementById("filter-clear").addEventListener("click", () => {
+      filters.q = "";
+      filters.priority = "";
+      filters.overdue = false;
+      searchEl.value = "";
+      filterPriorityEl.value = "";
+      filterOverdueEl.checked = false;
+      fetchTasks();
+    });
+
+    // Edit buttons are delegated because cards are re-rendered.
+    boardEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-edit]");
+      if (!btn) return;
+      const task = tasks.find((t) => t.id === Number(btn.dataset.edit));
+      if (task) openEditModal(task);
+    });
+
+    // Dismiss on overlay click (but not when clicking inside the modal).
+    overlayEl.addEventListener("click", (e) => {
+      if (e.target === overlayEl) closeModal();
+    });
+
+    // Dismiss on Escape.
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && overlayEl.classList.contains("show")) closeModal();
+    });
+
+    // ---- Start ----
+    fetchTasks();
+  </script>
+</body>
+</html>

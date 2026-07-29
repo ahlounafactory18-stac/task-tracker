@@ -15,7 +15,9 @@ the API during development.
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
 
 from app import storage
 from app.business_rules import is_overdue, validate_status_transition
@@ -110,7 +112,13 @@ def update_task(task_id: int, payload: TaskUpdate) -> TaskResponse:
                 ),
             )
 
-    return storage.update_task(task_id, changes)
+    # storage validates the merged record before committing. If a rejected value
+    # (e.g. an explicit null title) slips past the input model, surface it as a
+    # standard 422 validation error instead of an unhandled 500.
+    try:
+        return storage.update_task(task_id, changes)
+    except ValidationError as exc:
+        raise RequestValidationError(exc.errors()) from exc
 
 
 @app.delete("/tasks/{task_id}", status_code=204)

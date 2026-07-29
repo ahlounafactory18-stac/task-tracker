@@ -171,6 +171,27 @@ def test_patch_title_only_skips_transition(client, created_task):
     assert response.json()["status"] == "Done"
 
 
+def test_patch_null_title_rejected_and_does_not_corrupt_store(client, created_task):
+    # Regression: an explicit null title must be rejected AND must not corrupt the
+    # stored task. Previously the store was mutated before validation, so one bad
+    # update left every later GET /tasks returning 500.
+    task_id = created_task["id"]
+
+    # 1. The update is rejected with a validation error (422).
+    bad = client.patch(f"/tasks/{task_id}", json={"title": None})
+    assert bad.status_code == 422
+
+    # 2. The original task is completely unchanged.
+    got = client.get(f"/tasks/{task_id}")
+    assert got.status_code == 200
+    assert got.json()["title"] == created_task["title"]
+
+    # 3. The store is not corrupted: listing still works and returns 200.
+    listed = client.get("/tasks")
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+
+
 # --------------------------------------------------------------------------- #
 # Delete
 # --------------------------------------------------------------------------- #

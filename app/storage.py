@@ -68,17 +68,30 @@ def update_task(task_id: int, changes: dict) -> TaskResponse | None:
 
     ``changes`` should contain only the fields the caller wants to change
     (typically ``TaskUpdate.model_dump(exclude_unset=True)``). Unlisted fields
-    are left untouched. ``updated_at`` is refreshed. Returns the updated task,
-    or ``None`` if no task has that id. Rebuilding a ``TaskResponse`` re-validates
-    and coerces the merged record, so type integrity is preserved.
+    are left untouched. Returns the updated task, or ``None`` if no task has that
+    id.
+
+    The stored record is validated *before* it is written. The existing record
+    and the incoming changes are merged into a temporary copy, that copy is
+    validated by constructing a ``TaskResponse``, and only a successful
+    validation is committed back to storage. If validation fails (for example a
+    client sends ``{"title": null}`` directly to the API), the ValidationError
+    propagates and the stored task is left completely unchanged, so the store can
+    never be corrupted by a rejected update.
     """
     record = _tasks.get(task_id)
     if record is None:
         return None
-    for key, value in changes.items():
-        record[key] = value
-    record["updated_at"] = _now()
-    return TaskResponse(**record)
+
+    # Merge into a temporary copy; the stored record is NOT touched yet.
+    merged = {**record, **changes, "updated_at": _now()}
+
+    # Validate the merged copy. On failure this raises and storage is untouched.
+    validated = TaskResponse(**merged)
+
+    # Validation succeeded: commit the validated data back to storage.
+    _tasks[task_id] = merged
+    return validated
 
 
 def delete_task(task_id: int) -> bool:

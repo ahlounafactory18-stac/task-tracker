@@ -1,103 +1,102 @@
 # Final AI Review
 
-A closing, whole-repository review conducted from the perspective of a senior
-engineer verifying that AI-assisted work is correct, in-scope, and owned by a human
-before final submission. This complements `docs/code_review.md` (code quality) and
-`docs/ai_usage_report.md` (governance) by recording the **final** sign-off pass.
+A closing, whole-repository review of AI-assisted work before final submission. This
+document satisfies **Part C** with two graded mini-logs (an AI *code* review and an AI
+*security* review of real files), a confirmation that the `AGENTS.md` guardrails were
+followed, my three AI-usage rules, and a first-person ownership statement.
 
-- **Reviewer role:** Senior Software Engineer / Code Reviewer (final gate)
+- **Reviewer:** the repository author (final gate)
 - **Date:** 2026-08-10
-- **Branch:** `mid-course-project`
-- **Verdict:** ✅ **Approved for submission.** No AI-introduced defects, no scope
-  creep, no unverified claims remaining.
+- **Branch:** `final-project`
+- **Verdict:** ✅ Approved for submission — AI output was reviewed and graded, not
+  trusted blindly.
+
+Companion documents: `docs/code_review.md` (code quality), `docs/security_review.md`
+(full security analysis), `docs/ai_usage_report.md` (governance narrative),
+`docs/ai-playbook.md` (my working method), `docs/release-evidence.md` (objective proof).
 
 ---
 
-## 1. What this review checked
+## Part C.1 — AI Code Review Mini-Log
 
-1. That every AI-generated artifact (code and documentation) was read by a human and
-   its claims verified against the actual source and a passing test suite.
-2. That AI suggestions which were incorrect, out-of-scope, or unsafe were rejected —
-   and that the rejections are documented.
-3. That the release-hardening phase added **no product features or business-rule
-   changes** (the hard constraint for this submission).
-4. That the final state is internally consistent (docs match code, numbers match test
-   output).
+**What I did:** I asked an AI assistant to review the real, submitted source file
+[`app/main.py`](../app/main.py) and return specific comments. Below are its actual
+comments, each **graded (Useful / Noise / Wrong)** with my reasoning and the action I
+took. This grades the *AI's output*, not my code.
 
----
+| # | AI comment (on `app/main.py`) | Grade | My reason | Action taken |
+|---|-------------------------------|-------|-----------|--------------|
+| 1 | "`allow_origin_regex` combined with `allow_methods=['*']` and `allow_headers=['*']` (lines 32–34) is very permissive; scope it before any deployment." | **Useful** | Accurate and actionable. The wildcard methods/headers are safe only because the origin regex is localhost-only. It matches an independently-reached conclusion in the security review. | Recorded as a pre-deployment gate in `docs/security_review.md`; left as-is for local scope (intended). |
+| 2 | "In `list_tasks`, a blank `q` (`q.strip()` falsy, line 73) silently returns all tasks; consider rejecting blank `q` with a 422 for consistency." | **Wrong** | This misreads the contract. Blank/absent `q` means *no search filter*, which must return the full (other-filtered) list — returning 422 would break `GET /tasks` and several passing tests. | Rejected. No change. Noted the reasoning here so it is not re-raised. |
+| 3 | "Filters in `list_tasks` are applied as sequential list comprehensions (lines 67–78), each O(n); combine them into a single pass for efficiency." | **Noise** | Technically true but irrelevant at this scope: the store is a small in-memory dict, and clarity beats a micro-optimization here. Documented as tech debt (W4) already. | No change. Cross-referenced `docs/code_review.md` (W4). |
+| 4 | "The storage `ValidationError` → `RequestValidationError` remap (lines 118–121) is good, but consider logging the error so failures are observable." | **Useful** | Fair: the remap prevents a 500, but the failure is currently silent. Logging is a reasonable, in-scope hardening idea. | Deferred (out of this submission's no-behavior-change rule); logged as a future item in `docs/code_review.md` tech-debt notes. |
 
-## 2. Method
-
-- **Read-before-trust:** every generated file was reviewed line by line.
-- **Run-to-confirm:** `pytest tests/` (37 passed) and `python -m tests.verify_a`
-  (8/8) were re-run after all changes.
-- **Cross-check:** doc claims were checked against the code they describe (not
-  assumed). One claim was corrected during review (see §4).
-- **Scope diff:** confirmed no file under `app/`, `frontend/`, or `tests/` was modified
-  during hardening; all additions are docs, CI, Docker, and hygiene files.
+**Summary:** 4 AI comments — 2 Useful, 1 Noise, 1 Wrong. Two were acted on
+(documented / deferred), one rejected with reasoning, one dismissed as negligible. The
+AI did not surface a real defect, which is consistent with the code being covered by
+37 passing tests.
 
 ---
 
-## 3. Findings — code correctness
+## Part C.2 — AI Security Mini-Review
 
-| Area | Finding | Status |
-|------|---------|--------|
-| Data contract (`models.py`) | Strict Pydantic v2, separate input/output models, `extra="forbid"` blocks mass-assignment | ✅ Correct |
-| Storage (`storage.py`) | Validate-before-commit; store cannot be corrupted by a rejected update; regression test present | ✅ Correct |
-| Business rules (`business_rules.py`) | Transition pairs exact; `is_overdue` exempts `Done`; `today` injectable | ✅ Correct |
-| Routes (`main.py`) | 404-before-422 ordering; storage `ValidationError` surfaced as 422, not 500 | ✅ Correct |
-| Frontend (`index.html`) | `escapeHtml()` applied to all user fields; optimistic drag with rollback; diff-based PATCH | ✅ Correct |
+**What I did:** I asked an AI assistant to review the repository for security issues
+with file evidence. Below are its findings, each **graded (Valid / False Positive /
+Noise)** with the evidence I checked and the **next action**.
 
-No correctness defects were found in the reviewed code. The code was **not** modified
-during hardening; it was verified.
+| # | AI finding | File evidence | Grade | Reason | Next action |
+|---|-----------|---------------|-------|--------|-------------|
+| 1 | "No authentication on any endpoint — anyone can read, modify, or delete every task." | `app/main.py` (all routes; no auth dependency) | **Valid** | True and by design for the local single-user scope; it is the top gate before deployment. | Documented as mandatory pre-deployment gate in `docs/security_review.md` §4. Do not expose the API on a network until auth is added. |
+| 2 | "CORS allows any `localhost`/`127.0.0.1` origin on any port with `*` methods/headers." | `app/main.py:32-34` | **Valid** | Correct; safe locally, unsafe if deployed. | Replace the regex with an explicit origin allow-list before deployment (`docs/security_review.md` §5). No change for local scope. |
+| 3 | "Frontend renders task cards with `innerHTML` (`frontend/index.html:473`) → stored-XSS risk from task text." | `frontend/index.html:473` vs `escapeHtml` at `:383`, used at `:478,480,484,490,493` | **False Positive** | The `innerHTML` template interpolates only values already passed through `escapeHtml()`. Every user field (title, description, assignee, due_date, priority) is escaped. | No code change. Keep the escaping invariant on any future card field; recorded in `docs/security_review.md` §3. |
+| 4 | "`python-dotenv` is a dependency, so secrets in `.env` may leak into version control." | `requirements.txt`; `.gitignore`; `.env.example` | **Noise** | `.env` is git-ignored, only the non-sensitive `.env.example` is committed, no secret exists, and dotenv is not even read at runtime. The finding is generic, not evidence-based here. | None. Documented that the project stores no secrets (`docs/security_review.md` §1). |
 
----
-
-## 4. Findings — documentation accuracy
-
-- **Corrected during review:** an early draft of `docs/security_review.md` flagged a
-  possible frontend XSS "action item." Reading `frontend/index.html` showed every
-  user-supplied field already passes through `escapeHtml()`. The document was
-  corrected to record this as a **strength**, with a maintenance note to keep the
-  invariant on any future card field. This is the review process working as intended:
-  a plausible claim was checked against source and fixed before submission.
-- **Verified:** the "37 passed / 8-of-8" figures in all docs match live test output.
-- **Verified:** the endpoint/status-code tables in `README.md`, `architecture.md`, and
-  `release-evidence.md` match the routes in `app/main.py`.
+**Summary:** 4 findings — 2 Valid (both already documented as pre-deployment gates),
+1 False Positive (disproved by reading the source), 1 Noise. The two Valid findings
+are accepted risks for the local scope and blockers for any public deployment; neither
+changes the local-scope verdict.
 
 ---
 
-## 5. AI-risk register (final state)
+## Part C.3 — AGENTS.md guardrail confirmation & AI-usage rules
 
-| Risk | Present? | Evidence / mitigation |
-|------|----------|-----------------------|
-| Plausible-but-wrong logic | Mitigated | `is_overdue` `Done`-exemption bug was caught earlier via read + Break Test; regression test locks it |
-| Test/implementation collusion | Mitigated | Break Test confirms each rule has a test that fails when the rule is broken |
-| Scope creep | None | Rejected `/search` endpoint, client-only filtering, assignee search; hardening added zero features |
-| Unverified doc claims | None remaining | All claims cross-checked against source; one corrected (§4) |
-| Dependency drift | Low, documented | Lower-bound pins noted in `docs/dependency_review.md` with pinning recommendation |
-| Security blind spots | Documented | Open API + localhost CORS explicitly flagged as pre-deployment gates |
+**Guardrail confirmation.** I confirm the guardrails defined in
+[`AGENTS.md`](../AGENTS.md) were followed throughout the hardening work:
+
+- ✅ **No product features or business-rule changes** were made (the hard constraint).
+- ✅ **No source files** in `app/`, `frontend/`, or `tests/` were modified — hardening
+  added only docs, CI, Docker, and hygiene files.
+- ✅ **Layering, HTTP status codes, and the data contract** were left intact.
+- ✅ **Test suite stayed green** (`37 passed`, `8/8` model checks) before and after.
+- ✅ **No secrets** were introduced; `.env` remains git-ignored.
+
+**My three AI-usage rules (enforced on this project):**
+
+1. **Never-paste rule.** I never paste secrets, credentials, tokens, `.env` contents,
+   production logs, or personal/customer data into an AI prompt or tool. AI sees only
+   non-sensitive source and docs. (This project contains no secrets, so there was
+   nothing sensitive to withhold — the rule still governs how I work.)
+2. **Draft-not-authority rule.** AI output is a draft to be read, run, and break-tested
+   before acceptance. A passing suite is never sufficient proof on its own, because an
+   AI can write a test that agrees with its own wrong implementation.
+3. **Scope-lock rule.** I reject any AI suggestion that adds a feature, endpoint,
+   dependency, or framework I did not ask for, and I record the rejection. Scope is
+   mine to set, not the assistant's.
 
 ---
 
-## 6. Confirmation of constraints
+## Part C.4 — Ownership statement (first person)
 
-- ✅ **No new product features** were added during hardening.
-- ✅ **No business requirements changed** (status lifecycle, overdue definition, and
-  API contract are untouched).
-- ✅ **No source files** in `app/`, `frontend/`, or `tests/` were modified.
-- ✅ All additions are release-readiness artifacts (docs, CI, Docker, hygiene).
-
----
-
-## 7. Human ownership statement
-
-The human author has reviewed every AI-generated artifact in this repository,
-re-run the full verification suite, and confirmed the results independently. AI was
-used as a planner and draft generator only; the author made every acceptance decision,
-corrected AI errors, rejected out-of-scope suggestions, and verified all documentation
-against the code. The author understands how the system works and its limitations and
-can maintain it without AI assistance. Full governance record: `docs/ai_usage_report.md`;
-the working playbook that produced this discipline: `docs/ai-playbook.md`.
+I am comfortable submitting this repository as my own work. I set the scope and made
+every acceptance decision myself: I read each AI-generated file before keeping it, I
+re-ran the full test suite (`37 passed`) and the model checks (`8/8`) to confirm the
+results with my own eyes, and I graded the AI's code and security comments above rather
+than taking them on faith — accepting the useful ones, rejecting the wrong one, and
+disproving a false-positive by reading the source. When the AI was wrong earlier in the
+project (the `is_overdue` bug that flagged completed tasks as overdue), I caught it,
+fixed it, and locked the fix in with a regression test, and I rejected out-of-scope
+suggestions like a separate `/search` endpoint. I understand how every layer of this
+system works, why each decision was made, and what its limitations are, and I can
+maintain and extend it without AI assistance.
 
 **Final sign-off:** approved for course submission.

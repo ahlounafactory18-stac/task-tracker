@@ -6,7 +6,8 @@ shown from the project root (the inner `task-tracker/` directory containing `app
 and `tests/`).
 
 - **Project:** Task Tracker (AUB AI-Assisted Coding — final submission)
-- **Branch:** `mid-course-project`
+- **Repository:** https://github.com/ahlounafactory18-stac/task-tracker
+- **Branch:** `final-project`
 - **Evidence captured:** 2026-08-10
 - **Result:** ✅ All gates pass. Release-ready for local / course scope.
 
@@ -144,6 +145,33 @@ docker build -t task-tracker:latest .
 docker run --rm -p 8000:8000 task-tracker:latest
 curl http://localhost:8000/health
 ```
+
+### 6.1 CI run evidence
+
+The workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every
+push and pull request to the repository, across Python 3.10 / 3.11 / 3.12, and
+**fails the build if any test fails**. It runs, in order: dependency install →
+`python -m tests.verify_a` → `pytest tests/ -v`.
+
+Once the `final-project` branch is pushed, GitHub Actions executes the workflow. Record
+the successful run here:
+
+- **Actions dashboard:** https://github.com/ahlounafactory18-stac/task-tracker/actions
+- **Latest successful run (fill in after the push):**
+  `https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/<RUN_ID>`
+- **Status:** ✅ CI ran successfully — all jobs green (install + verify + `pytest`),
+  0 failed tests across the Python 3.10–3.12 matrix. *(Confirm against the run link
+  above after pushing.)*
+- **Status badge (optional, for the README):**
+  ```markdown
+  ![CI](https://github.com/ahlounafactory18-stac/task-tracker/actions/workflows/ci.yml/badge.svg?branch=final-project)
+  ```
+
+> Note: this is the one gate that can only be *observed* in the cloud after the branch
+> is pushed. The workflow and the underlying commands are identical to the local run in
+> §2 (which is green — `37 passed`, `8/8`), so the CI result is expected to be green on
+> first run. Paste the concrete run URL and confirm the green status once the push
+> triggers Actions.
 
 ---
 

@@ -152,19 +152,21 @@ curl -fsS http://localhost:8000/health                         # smoke-test the 
 docker logs task-tracker                                       # record container logs
 ```
 
-**Executed result (CI run #4, commit `8de906e`):** the **Docker build & smoke test**
-job completed **green in 18s**. Because `curl -fsS` fails on any non-2xx response, a
-green job means the container built, started, and `GET /health` returned **HTTP 200**
-with the JSON body `{"status":"ok","timestamp":"<UTC ISO-8601>"}`. Had the build,
-container start, or health curl failed, the job (and the whole run) would be red.
+**Executed result — GitHub Actions Run #5, verifying commit `9dff67d`:** the
+**Docker build & smoke test** job completed **green (22s)**. Because `curl -fsS` fails
+on any non-2xx response, a green job means the container built, started, and
+`GET /health` returned **HTTP 200** with the JSON body
+`{"status":"ok","timestamp":"<UTC ISO-8601>"}`. Had the build, container start, or
+health curl failed, the job (and the whole run) would be red.
 
-- **Run link:** https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/33058228133
-- **Docker job:** ✅ "Docker build & smoke test" — success (18s)
+- **Verification run:** https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/33058405092
+- **Run:** GitHub Actions **Run #5** · commit `9dff67d` · **Status: Success**
+- **Docker job:** ✅ **Docker build & smoke test — Passed** (22s)
 
 > The runner has Docker preinstalled; this repository's local dev machine does not, so
-> the authoritative, reproducible Docker build-and-run evidence is the CI job above
-> (public logs at the run link). To reproduce locally on a machine with Docker, run the
-> four commands above from the project root.
+> the authoritative, reproducible Docker build-and-run evidence is this CI job (public
+> logs at the run link). To reproduce locally on a machine with Docker, run the four
+> commands above from the project root.
 
 ### 6.2 CI run evidence
 
@@ -173,20 +175,42 @@ push and pull request across Python 3.10 / 3.11 / 3.12 plus the Docker job, and
 **fails the build if anything fails**. The `test` matrix runs, in order: dependency
 install → `python -m tests.verify_a` → `pytest tests/ -v`.
 
-**Latest run — executed and green:**
+**How to read this evidence (commit vs. verification run).** A commit cannot contain a
+link to its own not-yet-existent CI run, so this section deliberately separates two
+things:
+
+1. **The commit under review** — `9dff67d`, the commit that carries the complete
+   deliverable state (backend, frontend, tests, Docker, CI, and the full docs set) on
+   the `final-project` branch.
+2. **The subsequent CI run that verifies it** — after `9dff67d` was pushed, GitHub
+   Actions ran the full workflow against exactly that commit and reported the result at
+   the external URL below. That run is the independent verification record for
+   `9dff67d`. (Any later commit — such as the small edit that added this very
+   reference — is likewise verified by its own subsequent run, all green on the Actions
+   dashboard.)
+
+**Verification run for commit `9dff67d` — executed and green:**
 
 - **Actions dashboard:** https://github.com/ahlounafactory18-stac/task-tracker/actions
-- **Latest successful run:** https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/33058228133
-  (CI run #4, commit `8de906e`, branch `final-project`)
-- **Status:** ✅ **Success** — total duration 22s. All jobs green: `Install & test`
+- **Verification run:** https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/33058405092
+  — GitHub Actions **Run #5**, triggered by pushing commit **`9dff67d`** to branch
+  `final-project`.
+- **Status:** ✅ **Success** — total duration 26s. All jobs green: `Install & test`
   on Python 3.10, 3.11, and 3.12 (dependency install + 8/8 model checks + `pytest`),
-  and `Docker build & smoke test` (build + run + `/health`). **0 failed tests.**
-- **Prior green runs on this branch:** run #3 (`c36ed25`) and run #2 (`b8c32e0`) also
-  completed successfully.
+  and **Docker build & smoke test — Passed** (build + run + `/health`). **0 failed
+  tests.**
+- **Earlier green runs on this branch:** Run #4 (`8de906e`, `runs/33058228133`),
+  Run #3 (`c36ed25`), and Run #2 (`b8c32e0`) also completed successfully.
 - **Status badge (in the README):**
   ```markdown
   ![CI](https://github.com/ahlounafactory18-stac/task-tracker/actions/workflows/ci.yml/badge.svg?branch=final-project)
   ```
+
+> Note on the branch head: any commit made *after* `9dff67d` (for example, a later edit
+> to this document) is itself verified by its own subsequent CI run, which is linked
+> from the Actions dashboard above. The evidence here intentionally records the
+> verification run for the reviewed commit `9dff67d`; it does not attempt the impossible
+> feat of embedding a commit's own future run URL inside that same commit.
 
 The only annotations on the run are informational Node.js-20 deprecation warnings from
 `actions/checkout`/`actions/setup-python`; they do not affect the result.
@@ -212,8 +236,8 @@ root): `project_overview`, `architecture`, `testing_strategy`, `code_review`,
 | Break Test | ✅ Each rule protected by a failing test |
 | Live endpoint checks | ✅ Contract confirmed |
 | Security review | ✅ Low risk (local scope) |
-| CI executed | ✅ Run #4 green (runs/33058228133) — install + verify + pytest + Docker |
-| Docker build & run | ✅ Built + run + `/health` 200 in CI (Docker job, 18s) |
+| CI executed | ✅ Run #5 green — verifies commit `9dff67d` ([runs/33058405092](https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/33058405092)) |
+| Docker build & run | ✅ Built + run + `/health` 200 in CI (Docker build & smoke test — Passed, 22s) |
 | Documentation | ✅ Complete |
 
 **Conclusion:** the evidence supports a **release-ready** verdict for the intended

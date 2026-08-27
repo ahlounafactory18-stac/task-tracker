@@ -9,7 +9,9 @@ dependency-free **vanilla HTML/CSS/JavaScript** Kanban frontend.
 > both are intentional. See [`docs/release_readiness_report.md`](docs/release_readiness_report.md)
 > for what would be required before any public deployment.
 
-**Status:** 37 tests passing · CI configured · Docker-ready.
+[![CI](https://github.com/ahlounafactory18-stac/task-tracker/actions/workflows/ci.yml/badge.svg?branch=final-project)](https://github.com/ahlounafactory18-stac/task-tracker/actions/workflows/ci.yml)
+
+**Status:** 37 tests passing · CI green (tests + Docker build/run) · Docker-ready.
 
 ---
 

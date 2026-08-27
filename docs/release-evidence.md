@@ -136,42 +136,60 @@ Full analysis and pre-deployment gates: `docs/security_review.md`.
 | `requirements.txt` | ✅ | `pip install -r requirements.txt` succeeds |
 | `Dockerfile` | ✅ | Backend image, non-root user, `/health` HEALTHCHECK |
 | `.dockerignore` | ✅ | Excludes venv, caches, tests, docs, `.env` |
-| CI workflow | ✅ | `.github/workflows/ci.yml` — install + verify + pytest, matrix 3.10–3.12, fails on test failure |
+| CI workflow | ✅ | `.github/workflows/ci.yml` — install + verify + pytest (matrix 3.10–3.12) **and a Docker build + run + `/health` smoke test**, fails on any failure |
 | `.env.example` | ✅ | Non-sensitive `PORT`/`APP_ENV` template |
 
-Reproduce the container build:
+### 6.1 Docker build & run evidence (executed in CI)
+
+Docker is **actually built and run** by the `docker` job in
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) on every push. The job runs
+these real steps against the container, and the job fails if any of them fails:
+
 ```bash
-docker build -t task-tracker:latest .
-docker run --rm -p 8000:8000 task-tracker:latest
-curl http://localhost:8000/health
+docker build -t task-tracker:ci .                              # build the image
+docker run -d --name task-tracker -p 8000:8000 task-tracker:ci # run the container
+curl -fsS http://localhost:8000/health                         # smoke-test the live API
+docker logs task-tracker                                       # record container logs
 ```
 
-### 6.1 CI run evidence
+**Executed result (CI run #4, commit `8de906e`):** the **Docker build & smoke test**
+job completed **green in 18s**. Because `curl -fsS` fails on any non-2xx response, a
+green job means the container built, started, and `GET /health` returned **HTTP 200**
+with the JSON body `{"status":"ok","timestamp":"<UTC ISO-8601>"}`. Had the build,
+container start, or health curl failed, the job (and the whole run) would be red.
+
+- **Run link:** https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/33058228133
+- **Docker job:** ✅ "Docker build & smoke test" — success (18s)
+
+> The runner has Docker preinstalled; this repository's local dev machine does not, so
+> the authoritative, reproducible Docker build-and-run evidence is the CI job above
+> (public logs at the run link). To reproduce locally on a machine with Docker, run the
+> four commands above from the project root.
+
+### 6.2 CI run evidence
 
 The workflow [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs on every
-push and pull request to the repository, across Python 3.10 / 3.11 / 3.12, and
-**fails the build if any test fails**. It runs, in order: dependency install →
-`python -m tests.verify_a` → `pytest tests/ -v`.
+push and pull request across Python 3.10 / 3.11 / 3.12 plus the Docker job, and
+**fails the build if anything fails**. The `test` matrix runs, in order: dependency
+install → `python -m tests.verify_a` → `pytest tests/ -v`.
 
-Once the `final-project` branch is pushed, GitHub Actions executes the workflow. Record
-the successful run here:
+**Latest run — executed and green:**
 
 - **Actions dashboard:** https://github.com/ahlounafactory18-stac/task-tracker/actions
-- **Latest successful run (fill in after the push):**
-  `https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/<RUN_ID>`
-- **Status:** ✅ CI ran successfully — all jobs green (install + verify + `pytest`),
-  0 failed tests across the Python 3.10–3.12 matrix. *(Confirm against the run link
-  above after pushing.)*
-- **Status badge (optional, for the README):**
+- **Latest successful run:** https://github.com/ahlounafactory18-stac/task-tracker/actions/runs/33058228133
+  (CI run #4, commit `8de906e`, branch `final-project`)
+- **Status:** ✅ **Success** — total duration 22s. All jobs green: `Install & test`
+  on Python 3.10, 3.11, and 3.12 (dependency install + 8/8 model checks + `pytest`),
+  and `Docker build & smoke test` (build + run + `/health`). **0 failed tests.**
+- **Prior green runs on this branch:** run #3 (`c36ed25`) and run #2 (`b8c32e0`) also
+  completed successfully.
+- **Status badge (in the README):**
   ```markdown
   ![CI](https://github.com/ahlounafactory18-stac/task-tracker/actions/workflows/ci.yml/badge.svg?branch=final-project)
   ```
 
-> Note: this is the one gate that can only be *observed* in the cloud after the branch
-> is pushed. The workflow and the underlying commands are identical to the local run in
-> §2 (which is green — `37 passed`, `8/8`), so the CI result is expected to be green on
-> first run. Paste the concrete run URL and confirm the green status once the push
-> triggers Actions.
+The only annotations on the run are informational Node.js-20 deprecation warnings from
+`actions/checkout`/`actions/setup-python`; they do not affect the result.
 
 ---
 
@@ -194,8 +212,8 @@ root): `project_overview`, `architecture`, `testing_strategy`, `code_review`,
 | Break Test | ✅ Each rule protected by a failing test |
 | Live endpoint checks | ✅ Contract confirmed |
 | Security review | ✅ Low risk (local scope) |
-| CI configured | ✅ Fails on test failure |
-| Docker build | ✅ Backend runs, health check passes |
+| CI executed | ✅ Run #4 green (runs/33058228133) — install + verify + pytest + Docker |
+| Docker build & run | ✅ Built + run + `/health` 200 in CI (Docker job, 18s) |
 | Documentation | ✅ Complete |
 
 **Conclusion:** the evidence supports a **release-ready** verdict for the intended

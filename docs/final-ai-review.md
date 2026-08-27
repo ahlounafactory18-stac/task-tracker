@@ -58,6 +58,78 @@ changes the local-scope verdict.
 
 ---
 
+## Manual security check
+
+Separate from the AI-assisted review above, I performed my **own manual** security
+check — no AI involved — by reading the source and repository state directly. This is
+what I looked at and what I found:
+
+1. **Secret scan of source and git history.** I searched the codebase and history for
+   credentials:
+   ```bash
+   grep -ri "password\|secret\|api_key\|apikey\|token\|authorization" app/ frontend/ tests/
+   git log -p -- .env            # any committed .env content?
+   git ls-files | grep -E "\.env$|\.pem$|\.key$"
+   ```
+   **Result:** no secrets, tokens, keys, or credentials in source or history. `.env` is
+   git-ignored; only the non-sensitive `.env.example` is tracked. **Pass.**
+
+2. **Input-boundary check.** I confirmed by reading `app/models.py` that every input
+   model uses `extra="forbid"` (blocking mass-assignment of `id`/timestamps) and that
+   `app/storage.py` re-validates the merged record before committing, so a rejected
+   update surfaces as 422 and cannot corrupt the store. **Pass.**
+
+3. **Frontend output-escaping check.** I traced `renderCard` in
+   `frontend/index.html` and confirmed every user-supplied field (title, description,
+   assignee, due_date, priority) is wrapped in `escapeHtml()` before it reaches the
+   `innerHTML` template (`:383` definition, used at `:478,480,484,490,493`). **Pass.**
+
+4. **Trust-boundary check.** I confirmed the API has **no authentication** and that
+   CORS (`app/main.py:32-34`) is limited to localhost origins. **Finding:** acceptable
+   for the local single-user scope, but both are hard gates before any deployment.
+   **Next action:** documented in `docs/security_review.md` §4–§5; do not expose the
+   API publicly until auth + an explicit CORS allow-list are added.
+
+**Manual-check verdict:** no secrets, strong input validation, safe output escaping;
+the only real exposure (no auth / permissive CORS) is a known, documented,
+scope-appropriate acceptance.
+
+---
+
+## One AI output I rejected or corrected
+
+A dedicated record of AI output I did **not** simply accept. (There were several; two
+representative cases below — one rejected, one corrected.)
+
+### Rejected — a new `/search` endpoint
+
+- **What the AI proposed:** while building the search feature, the assistant suggested
+  adding a dedicated `POST /search` (and, separately, filtering the already-loaded task
+  list only in the browser).
+- **Why I rejected it:** a new endpoint was out of the Module scope, and client-only
+  filtering would have left the backend search **untested and unenforced**. Both were
+  the wrong shape for this project.
+- **What I did instead:** I extended the existing `GET /tasks` with a `q` query
+  parameter (case-insensitive substring over title/description), combined with the
+  existing filters, and had the frontend call that endpoint. This keeps filtering
+  enforced and tested on the backend. Evidence: `app/main.py:73-78`,
+  `tests/test_midcourse.py` search tests.
+
+### Corrected — the `is_overdue` rule flagged completed tasks
+
+- **What the AI produced:** the first `is_overdue` draft treated **any** task with a
+  past due date as overdue — including tasks already marked `Done` — and it wrote a test
+  that agreed with that flawed behavior, so the suite passed.
+- **How I caught it:** by **reading the draft**, not from a failing test. A finished
+  task is not late, so the logic was wrong even though it was green.
+- **What I did:** I added the `status is TaskStatus.Done` exemption
+  (`app/business_rules.py:51`) and wrote `test_completed_task_is_not_overdue` to lock
+  the correct behavior in, then proved it with a Break Test (removing the exemption
+  makes that test fail). This is the clearest example of why I treat a passing suite as
+  necessary but not sufficient.
+
+---
+
 ## Part C.3 — AGENTS.md guardrail confirmation & AI-usage rules
 
 **Guardrail confirmation.** I confirm the guardrails defined in

@@ -15,6 +15,7 @@ dependency-free **vanilla HTML/CSS/JavaScript** Kanban frontend.
 
 ## Table of contents
 
+- [Final Project](#final-project)
 - [Project overview](#project-overview)
 - [Features](#features)
 - [Architecture overview](#architecture-overview)
@@ -29,6 +30,48 @@ dependency-free **vanilla HTML/CSS/JavaScript** Kanban frontend.
 - [API reference](#api-reference)
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Final Project
+
+This repository is the **final course project**: the Task Tracker built across the
+course, hardened into a teammate-maintainable release. **No product features were
+added** in this phase — the work was to verify, document, review, govern, and prove
+ownership of the existing app.
+
+- **Submission branch:** `final-project` (pushed to
+  https://github.com/ahlounafactory18-stac/task-tracker).
+- **What was added:** full documentation set, an AI code/security review, an AI
+  playbook, release evidence, a CI pipeline (tests + Docker smoke test), and a
+  Dockerfile — all listed in [Documentation](#documentation).
+
+**Final Project deliverables**
+
+| Deliverable | Where |
+|-------------|-------|
+| Professional README (this file) | `README.md` |
+| Maintainer/agent guide | [`AGENTS.md`](AGENTS.md) |
+| Release readiness (go/no-go) | [`docs/release_readiness_report.md`](docs/release_readiness_report.md) |
+| Release evidence (test/CI/Docker output) | [`docs/release-evidence.md`](docs/release-evidence.md) |
+| Final AI review (graded code + security mini-logs) | [`docs/final-ai-review.md`](docs/final-ai-review.md) |
+| AI playbook (personal AI-usage policy) | [`docs/ai-playbook.md`](docs/ai-playbook.md) |
+| AI usage & governance | [`docs/ai_usage_report.md`](docs/ai_usage_report.md) |
+| Code / security / testing / deployment / dependency reviews | [`docs/`](docs/) |
+| CI pipeline (tests across Py 3.10–3.12 + Docker build & run) | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+| Container build | [`Dockerfile`](Dockerfile), [`.dockerignore`](.dockerignore) |
+
+**How to verify this submission**
+
+```bash
+pip install -r requirements.txt
+python -m tests.verify_a     # 8/8 model checks
+pytest tests/ -v             # 37 tests pass
+```
+
+CI runs the same commands plus a real Docker build-and-run smoke test on every push;
+the executed results (with the run link) are recorded in
+[`docs/release-evidence.md`](docs/release-evidence.md).
 
 ---
 

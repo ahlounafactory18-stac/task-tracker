@@ -39,3 +39,43 @@ jobs:
       # Full API suite. A single failing test fails the job (and blocks merge).
       - name: Run tests
         run: pytest tests/ -v
+
+  docker:
+    name: Docker build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Actually build the backend image from the Dockerfile.
+      - name: Build image
+        run: docker build -t task-tracker:ci .
+
+      # Actually run the container, detached, publishing the API port.
+      - name: Run container
+        run: docker run -d --name task-tracker -p 8000:8000 task-tracker:ci
+
+      # Real smoke test: poll the live /health endpoint and print the response.
+      - name: Curl /health
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:8000/health; then
+              echo
+              echo "HEALTH CHECK PASSED"
+              exit 0
+            fi
+            echo "waiting for container... ($i)"
+            sleep 2
+          done
+          echo "HEALTH CHECK FAILED"
+          docker logs task-tracker
+          exit 1
+
+      # Print the container logs as part of the run record.
+      - name: Container logs
+        if: always()
+        run: docker logs task-tracker
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f task-tracker
